@@ -1,9 +1,9 @@
-CREATE OR REPLACE FUNCTION jwt.url_encode(data BYTEA)
+CREATE OR REPLACE FUNCTION extensions.url_encode(data BYTEA)
   RETURNS TEXT LANGUAGE SQL AS $$
 SELECT translate(encode(data, 'base64'), E'+/=\n', '-_');
 $$;
 
-CREATE OR REPLACE FUNCTION jwt.url_decode(data TEXT)
+CREATE OR REPLACE FUNCTION extensions.url_decode(data TEXT)
   RETURNS BYTEA LANGUAGE SQL AS $$
 WITH t AS (SELECT translate(data, '-_', '+/')),
     rem AS (SELECT length((SELECT *
@@ -20,7 +20,7 @@ SELECT decode(
 $$;
 
 
-CREATE OR REPLACE FUNCTION jwt.algorithm_sign(signables TEXT, secret TEXT, algorithm TEXT)
+CREATE OR REPLACE FUNCTION extensions.algorithm_sign(signables TEXT, secret TEXT, algorithm TEXT)
   RETURNS TEXT LANGUAGE SQL AS $$
 WITH
     alg AS (
@@ -32,19 +32,19 @@ WITH
              WHEN algorithm = 'HS512'
                THEN 'sha512'
              ELSE '' END) -- hmac throws error
-SELECT jwt.url_encode(extensions.hmac(signables, secret, (SELECT *
+SELECT extensions.url_encode(extensions.hmac(signables, secret, (SELECT *
                                                FROM alg)));
 $$;
 
 
-CREATE OR REPLACE FUNCTION jwt.sign(payload JSON, secret TEXT, algorithm TEXT DEFAULT 'HS256')
+CREATE OR REPLACE FUNCTION extensions.sign(payload JSON, secret TEXT, algorithm TEXT DEFAULT 'HS256')
   RETURNS TEXT LANGUAGE SQL AS $$
 WITH
     header AS (
-      SELECT jwt.url_encode(convert_to('{"alg":"' || algorithm || '","typ":"JWT"}', 'utf8'))
+      SELECT extensions.url_encode(convert_to('{"alg":"' || algorithm || '","typ":"JWT"}', 'utf8'))
   ),
     payload AS (
-      SELECT jwt.url_encode(convert_to(payload :: TEXT, 'utf8'))
+      SELECT extensions.url_encode(convert_to(payload :: TEXT, 'utf8'))
   ),
     signables AS (
       SELECT (SELECT *
@@ -54,17 +54,17 @@ WITH
 SELECT (SELECT *
         FROM signables)
        || '.' ||
-       jwt.algorithm_sign((SELECT *
+       extensions.algorithm_sign((SELECT *
                            FROM signables), secret, algorithm);
 $$;
 
 
-CREATE OR REPLACE FUNCTION jwt.verify(token TEXT, secret TEXT, algorithm TEXT DEFAULT 'HS256')
+CREATE OR REPLACE FUNCTION extensions.verify(token TEXT, secret TEXT, algorithm TEXT DEFAULT 'HS256')
   RETURNS TABLE(header JSON, payload JSON, valid BOOLEAN) LANGUAGE SQL AS $$
 SELECT
-  convert_from(jwt.url_decode(r [1]), 'utf8') :: JSON                  AS header,
-  convert_from(jwt.url_decode(r [2]), 'utf8') :: JSON                  AS payload,
-  r [3] = jwt.algorithm_sign(r [1] || '.' || r [2], secret, algorithm) AS valid
+  convert_from(extensions.url_decode(r [1]), 'utf8') :: JSON                  AS header,
+  convert_from(extensions.url_decode(r [2]), 'utf8') :: JSON                  AS payload,
+  r [3] = extensions.algorithm_sign(r [1] || '.' || r [2], secret, algorithm) AS valid
 FROM regexp_split_to_array(token, '\.') r;
 $$;
 
