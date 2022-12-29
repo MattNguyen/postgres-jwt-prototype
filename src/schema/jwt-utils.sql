@@ -1,6 +1,3 @@
-CREATE SCHEMA jwt;
-CREATE EXTENSION pgcrypto;
-
 CREATE OR REPLACE FUNCTION jwt.url_encode(data BYTEA)
   RETURNS TEXT LANGUAGE SQL AS $$
 SELECT translate(encode(data, 'base64'), E'+/=\n', '-_');
@@ -35,7 +32,7 @@ WITH
              WHEN algorithm = 'HS512'
                THEN 'sha512'
              ELSE '' END) -- hmac throws error
-SELECT jwt.url_encode(public.hmac(signables, secret, (SELECT *
+SELECT jwt.url_encode(extensions.hmac(signables, secret, (SELECT *
                                                FROM alg)));
 $$;
 
